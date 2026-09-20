@@ -60,7 +60,7 @@ el emoji baja a opacidad 140 para que se note de un vistazo.
 | `show-windows` | `true` | Muestra el renglón de detalle (ventanas + clientes) en cada fila |
 | `allow-kill` | `true` | Muestra el botón ✕ |
 | `panel-position` | `right` | `left`, `center` o `right` |
-| `refresh-interval` | `10` | Segundos entre refrescos automáticos (2–300) |
+| `refresh-interval` | `30` | Segundos entre refrescos con el menú **cerrado** (2–300). Con el menú abierto el sondeo pasa a 3 s |
 
 Leer/escribir a mano:
 
@@ -125,8 +125,17 @@ porque no puede aparecer en un nombre de sesión — un `|` o un `:` sí podría
 Si el comando falla (no hay servidor tmux corriendo), devuelve lista vacía sin
 ruido: ese es el caso normal de "no hay sesiones", no un error.
 
-El refresco corre en tres momentos: cada `refresh-interval` segundos, al abrir el
-menú, y 2 s después de lanzar/matar una sesión (`_scheduleRefresh()`).
+El refresco corre al abrir el menú, 2 s después de lanzar o matar una sesión
+(`_scheduleRefresh()`), y por timer: cada 3 s mientras el menú está abierto y
+cada `refresh-interval` segundos cuando está cerrado, donde lo único que puede
+cambiar es el contador del panel.
+
+Un refresco en vuelo bloquea los siguientes (`_refreshing`), porque el timer, el
+abrir el menú y las acciones pueden pedirlo casi a la vez.
+
+El menú **no** se rearma en cada refresco: se compara una firma de la lista
+(`nombre\tventanas\tclientes` por sesión) y solo se reconstruyen los actores si
+cambió algo de verdad.
 
 ---
 
@@ -175,6 +184,18 @@ pero atrapa los errores de sintaxis, que son la mitad de los fallos al iterar.
 
 ## Detalles de implementación y trampas
 
+- **Las terminales se lanzan con `Gio.Subprocess`, no con `GLib.spawn_async()`.**
+  GSubprocess se cosecha solo: mantiene su propio child watch en el worker de
+  GLib aunque se suelte la referencia. Con `GLib.spawn_async` +
+  `DO_NOT_REAP_CHILD` y sin `child_watch_add`, **cada terminal abierta dejaba un
+  proceso zombie** colgando de gnome-shell hasta reiniciar la shell. La
+  alternativa (`child_watch_add` + `spawn_close_pid`) obliga a llevar la cuenta
+  de esos GSource para removerlos en `destroy()`; `Gio.Subprocess` no necesita
+  ninguna de las dos cosas.
+- **El menú se rearma solo si la lista cambió.** `removeAll()` destruye y recrea
+  todos los actores; hacerlo en cada tick con el menú abierto era basura para el
+  GC y además borraba lo tipeado en *Nueva sesión…*. Lo que se tipeó se preserva
+  igual entre rearmados (`_newItem.getText()` / `setText()`).
 - **El emoji del panel es un `St.Label`, no un `St.Icon`.** Un SVG cargado como
   `-symbolic.svg` lo recolorea St con el color del tema y perdería el verde.
   El tamaño se ajusta con `.tmux-panel-icon { font-size: 11px; }` en

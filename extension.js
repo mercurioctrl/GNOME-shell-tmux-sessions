@@ -17,6 +17,10 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 // Separador de campos para el formato de tmux (unit separator).
 const SEP = String.fromCharCode(31);
 
+// Sondeo mientras el menú está abierto, en segundos. Cerrado manda la clave
+// 'refresh-interval'.
+const MENU_OPEN_INTERVAL = 3;
+
 /* ---------- helpers de proceso ---------- */
 
 function runCapture(argv) {
@@ -40,12 +44,17 @@ function runCapture(argv) {
     });
 }
 
+// Lanza un proceso que sobrevive a la extensión.
+//
+// Se usa Gio.Subprocess y no GLib.spawn_async() a propósito: GSubprocess se
+// cosecha solo (mantiene su propio child watch en el worker de GLib, aunque se
+// suelte esta referencia), así que el proceso no queda zombie en la tabla de
+// gnome-shell ni hace falta un GSource nuestro que después habría que remover
+// en destroy(). Con GLib.spawn_async + DO_NOT_REAP_CHILD y sin child watch,
+// cada terminal abierta dejaba un zombie hasta reiniciar la shell.
 function spawnDetached(argv) {
     try {
-        GLib.spawn_async(
-            null, argv, null,
-            GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
-            null);
+        Gio.Subprocess.new(argv, Gio.SubprocessFlags.NONE);
         return true;
     } catch (e) {
         Main.notifyError('tmux Sessions', `No se pudo ejecutar: ${argv.join(' ')}`);
@@ -176,6 +185,16 @@ class NewSessionItem extends PopupMenu.PopupBaseMenuItem {
         });
         this.add_child(this._entry);
     }
+
+    // Para no perder lo tipeado cuando el menú se rearma con el menú abierto.
+    getText() {
+        return this._entry.get_text();
+    }
+
+    setText(text) {
+        if (text)
+            this._entry.set_text(text);
+    }
 });
 
 /* ---------- indicador ---------- */
@@ -191,7 +210,10 @@ class TmuxIndicator extends PanelMenu.Button {
         this._timeoutId = 0;
         this._pendingId = 0;
         this._destroyed = false;
-        this._menuBuilt = false;
+        this._refreshing = false;   // hay un list-sessions en vuelo
+        this._menuDirty = true;     // la lista cambió desde el último armado
+        this._signature = null;     // huella de la lista, para no rearmar de gusto
+        this._newItem = null;
 
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this._icon = new St.Label({
@@ -208,7 +230,12 @@ class TmuxIndicator extends PanelMenu.Button {
         box.add_child(this._label);
         this.add_child(box);
 
+        // Con el menú abierto se mira más seguido; cerrado, solo hace falta
+        // mantener el contador del panel.
         this.menu.connect('open-state-changed', (_m, open) => {
+            if (open && this._menuDirty)
+                this._rebuildMenu();
+            this._restartTimer();
             if (open)
                 this._refresh();
         });
@@ -216,7 +243,7 @@ class TmuxIndicator extends PanelMenu.Button {
         this._settingsChangedId = this._settings.connect('changed', (_s, key) => {
             if (key === 'refresh-interval')
                 this._restartTimer();
-            this._menuBuilt = false;
+            this._menuDirty = true;
             this._refresh();
         });
 
@@ -249,7 +276,11 @@ class TmuxIndicator extends PanelMenu.Button {
             GLib.Source.remove(this._timeoutId);
             this._timeoutId = 0;
         }
-        const secs = this._settings.get_int('refresh-interval');
+        // Con el menú abierto el usuario está mirando la lista: vale la pena
+        // el sondeo rápido. Cerrado, lo único que cambia es el contador.
+        const secs = this.menu.isOpen
+            ? MENU_OPEN_INTERVAL
+            : this._settings.get_int('refresh-interval');
         this._timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, secs, () => {
             this._refresh();
             return GLib.SOURCE_CONTINUE;
@@ -280,9 +311,19 @@ class TmuxIndicator extends PanelMenu.Button {
     }
 
     async _refresh() {
-        if (this._destroyed)
+        // El timer, el abrir el menú y las acciones pueden pedir refresco casi
+        // a la vez: sin esta guarda quedarían varios list-sessions en vuelo
+        // pisándose el resultado.
+        if (this._destroyed || this._refreshing)
             return;
-        const sessions = await this._listSessions();
+        this._refreshing = true;
+
+        let sessions;
+        try {
+            sessions = await this._listSessions();
+        } finally {
+            this._refreshing = false;
+        }
         if (this._destroyed)
             return;
         this._sessions = sessions;
@@ -293,15 +334,28 @@ class TmuxIndicator extends PanelMenu.Button {
         this._label.visible = showCount;
         this._icon.opacity = n > 0 ? 255 : 140;
 
-        if (this.menu.isOpen || !this._menuBuilt)
+        // Rearmar el menú destruye y recrea todos los actores, así que solo se
+        // hace si la lista cambió de verdad. Antes se rearmaba en cada tick con
+        // el menú abierto, lo que además borraba lo tipeado en "Nueva sesión".
+        const signature = this._sessions
+            .map(s => `${s.name}\t${s.windows}\t${s.attached}`)
+            .join('\n');
+        if (signature !== this._signature) {
+            this._signature = signature;
+            this._menuDirty = true;
+        }
+
+        if (this._menuDirty && this.menu.isOpen)
             this._rebuildMenu();
     }
 
     /* --- menú --- */
 
     _rebuildMenu() {
+        const pendingName = this._newItem?.getText() ?? '';
+
         this.menu.removeAll();
-        this._menuBuilt = true;
+        this._menuDirty = false;
 
         const showWindows = this._settings.get_boolean('show-windows');
         const allowKill = this._settings.get_boolean('allow-kill');
@@ -323,10 +377,12 @@ class TmuxIndicator extends PanelMenu.Button {
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        this.menu.addMenuItem(new NewSessionItem(name => {
+        this._newItem = new NewSessionItem(name => {
             this.menu.close();
             this._newSession(name);
-        }));
+        });
+        this._newItem.setText(pendingName);
+        this.menu.addMenuItem(this._newItem);
 
         const quickNew = new PopupMenu.PopupMenuItem(_('Nueva sesión sin nombre'));
         quickNew.connect('activate', () => this._newSession(''));
@@ -369,7 +425,7 @@ class TmuxIndicator extends PanelMenu.Button {
             GLib.Source.remove(this._pendingId);
         this._pendingId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
             this._pendingId = 0;
-            this._menuBuilt = false;
+            this._menuDirty = true;
             this._refresh();
             return GLib.SOURCE_REMOVE;
         });
@@ -382,7 +438,7 @@ class TmuxIndicator extends PanelMenu.Button {
             `Se va a cerrar la sesión "${session.name}" y todos sus procesos.`,
             async () => {
                 await runCapture([this._tmux(), 'kill-session', '-t', session.name]);
-                this._menuBuilt = false;
+                this._menuDirty = true;
                 this._refresh();
             });
         dlg.open();
@@ -402,6 +458,8 @@ class TmuxIndicator extends PanelMenu.Button {
             this._settings.disconnect(this._settingsChangedId);
             this._settingsChangedId = 0;
         }
+        this._newItem = null;
+        this._sessions = [];
         super.destroy();
     }
 });

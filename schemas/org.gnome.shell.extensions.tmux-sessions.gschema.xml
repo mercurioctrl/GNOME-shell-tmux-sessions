@@ -16,10 +16,10 @@
     </key>
 
     <key name="refresh-interval" type="i">
-      <default>10</default>
+      <default>30</default>
       <range min="2" max="300"/>
       <summary>Intervalo de refresco (segundos)</summary>
-      <description>Cada cuánto se actualiza el contador del panel.</description>
+      <description>Cada cuánto se actualiza el contador del panel con el menú cerrado. Con el menú abierto el sondeo es cada 3 s.</description>
     </key>
 
     <key name="show-count" type="b">
