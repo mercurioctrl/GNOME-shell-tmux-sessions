@@ -1,0 +1,8 @@
+{
+  "uuid": "tmux-sessions@hermess",
+  "name": "tmux Sessions",
+  "description": "Muestra las sesiones de tmux en la barra superior. Clic (izquierdo o derecho) abre el menú; clic en una sesión la abre en la terminal con tmux attach.",
+  "shell-version": ["45", "46", "47", "48"],
+  "settings-schema": "org.gnome.shell.extensions.tmux-sessions",
+  "version": 1
+}

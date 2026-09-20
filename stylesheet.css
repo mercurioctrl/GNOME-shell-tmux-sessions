@@ -1,0 +1,40 @@
+.tmux-panel-icon {
+    font-size: 11px;
+}
+
+.tmux-panel-label {
+    font-weight: bold;
+    padding-left: 3px;
+}
+
+.tmux-session-item {
+    spacing: 8px;
+}
+
+.tmux-session-name {
+    font-weight: bold;
+}
+
+.tmux-session-detail {
+    font-size: 0.8em;
+    color: rgba(238, 238, 236, 0.65);
+}
+
+.tmux-kill-button {
+    padding: 2px;
+    border-radius: 99px;
+    color: rgba(238, 238, 236, 0.5);
+}
+
+.tmux-kill-button:hover {
+    background-color: rgba(224, 27, 36, 0.85);
+    color: #ffffff;
+}
+
+.tmux-new-item {
+    spacing: 8px;
+}
+
+.tmux-new-entry {
+    min-width: 180px;
+}

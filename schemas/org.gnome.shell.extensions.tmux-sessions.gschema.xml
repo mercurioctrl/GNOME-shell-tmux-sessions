@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.tmux-sessions"
+          path="/org/gnome/shell/extensions/tmux-sessions/">
+
+    <key name="terminal-command" type="s">
+      <default>'ghostty -e'</default>
+      <summary>Comando de terminal</summary>
+      <description>Terminal y flag para ejecutar un comando. Ej: "ghostty -e", "gnome-terminal --", "kitty", "alacritty -e".</description>
+    </key>
+
+    <key name="tmux-command" type="s">
+      <default>'tmux'</default>
+      <summary>Binario de tmux</summary>
+      <description>Ruta o nombre del ejecutable de tmux.</description>
+    </key>
+
+    <key name="refresh-interval" type="i">
+      <default>10</default>
+      <range min="2" max="300"/>
+      <summary>Intervalo de refresco (segundos)</summary>
+      <description>Cada cuánto se actualiza el contador del panel.</description>
+    </key>
+
+    <key name="show-count" type="b">
+      <default>true</default>
+      <summary>Mostrar cantidad en el panel</summary>
+      <description>Muestra el número de sesiones junto al icono.</description>
+    </key>
+
+    <key name="detach-others" type="b">
+      <default>false</default>
+      <summary>Desconectar otros clientes al adjuntar</summary>
+      <description>Usa "tmux attach -d" para desconectar cualquier otro cliente de esa sesión.</description>
+    </key>
+
+    <key name="show-windows" type="b">
+      <default>true</default>
+      <summary>Mostrar ventanas de cada sesión</summary>
+      <description>Muestra la cantidad de ventanas y el estado de conexión debajo del nombre.</description>
+    </key>
+
+    <key name="allow-kill" type="b">
+      <default>true</default>
+      <summary>Permitir matar sesiones</summary>
+      <description>Muestra un botón para terminar una sesión (pide confirmación).</description>
+    </key>
+
+    <key name="panel-position" type="s">
+      <default>'right'</default>
+      <summary>Posición en el panel</summary>
+      <description>left, center o right.</description>
+    </key>
+
+  </schema>
+</schemalist>
