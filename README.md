@@ -4,9 +4,21 @@ Indicador en la barra superior de GNOME que lista las sesiones de tmux del usuar
 Un clic abre el menú; un clic en una sesión la abre en la terminal con `tmux attach-session`.
 
 - **UUID:** `tmux-sessions@hermess`
-- **Ruta:** `~/.local/share/gnome-shell/extensions/tmux-sessions@hermess/`
 - **Probado en:** GNOME Shell 46 (X11), tmux 3.4, Ghostty 1.2.2, Ubuntu
 - **Declara soporte:** shell 45–48 (API ESM de GNOME 45+)
+
+## Instalación
+
+```bash
+git clone git@github.com:mercurioctrl/GNOME-shell-tmux-sessions.git ~/Proyectos/gnome-shell-tmux-sessions
+ln -s ~/Proyectos/gnome-shell-tmux-sessions ~/.local/share/gnome-shell/extensions/tmux-sessions@hermess
+glib-compile-schemas ~/Proyectos/gnome-shell-tmux-sessions/schemas/
+# recargar GNOME Shell: Alt+F2 -> r -> Enter (X11) o cerrar sesión (Wayland)
+gnome-extensions enable tmux-sessions@hermess
+```
+
+`schemas/gschemas.compiled` no está versionado: hay que generarlo con
+`glib-compile-schemas` después de clonar y cada vez que se toque el `.gschema.xml`.
 
 ---
 
@@ -77,7 +89,7 @@ Si el parseo falla, cae a `ghostty -e`.
 ## Archivos
 
 ```
-tmux-sessions@hermess/
+gnome-shell-tmux-sessions/     ← symlinkeado como tmux-sessions@hermess
 ├── extension.js      indicador, menú, listado y lanzamiento
 ├── prefs.js          ventana de preferencias (libadwaita / Adw)
 ├── stylesheet.css    estilos del panel y del menú
