@@ -345,7 +345,11 @@ class TmuxIndicator extends PanelMenu.Button {
             this._menuDirty = true;
         }
 
-        if (this._menuDirty && this.menu.isOpen)
+        // PopupMenu.open() se planta si el menú está vacío, así que armarlo
+        // recién al abrirse no alcanza: nunca se abre y el clic no hace nada.
+        // Por eso se rearma esté abierto o cerrado; la firma de arriba ya evita
+        // rearmar de gusto en cada tick.
+        if (this._menuDirty)
             this._rebuildMenu();
     }
 
